@@ -1,0 +1,52 @@
+td > label {
+	font-weight: normal;
+}
+
+textarea:hover,
+input:hover,
+textarea:active,
+input:active,
+textarea:focus,
+input:focus,
+button:focus,
+button:active,
+button:hover
+{
+	outline:0px !important;
+	-webkit-appearance:none;
+	box-shadow: none !important;
+	-moz-box-shadow: none !important;
+	-webkit-box-shadow: none !important;
+}
+
+textarea:focus {
+	border-color: #999 !important;
+}
+
+#password-strength{
+	background-color:#eee;
+	border-color:#ddd!important;
+	display: block;
+	border-style: solid;
+	border-width: 1px;
+	float: left;
+	margin: 13px 5px 5px 1px;
+	padding: 3px 5px;
+	text-align: center;
+	width: 200px;
+}
+#password-strength.bad{
+	background-color:#ffb78c;
+	border-color:#ff853c!important;
+}
+#password-strength.good{
+	background-color:#ffec8b;
+	border-color:#fc0!important;
+}
+#password-strength.short{
+	background-color:#ffa0a0;
+	border-color:#f04040!important;
+}
+#password-strength.strong{
+	background-color:#c3ff88;border-color:#8dff1c!important;
+}
