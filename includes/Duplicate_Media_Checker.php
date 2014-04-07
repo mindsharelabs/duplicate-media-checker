@@ -1,15 +1,14 @@
 <?php
+
 /**
  * Duplicate_Media_Checker.php
- * 
- * @created 4/6/14 1:33 PM
- * @author Mindshare Studios, Inc.
+ *
+ * @created   4/6/14 1:33 PM
+ * @author    Mindshare Studios, Inc.
  * @copyright Copyright (c) 2014
- * @link http://www.mindsharelabs.com/documentation/
- * 
+ * @link      http://www.mindsharelabs.com/documentation/
+ *
  */
-
-
 class Duplicate_Media_Checker {
 
 	/**
@@ -31,50 +30,70 @@ class Duplicate_Media_Checker {
 	public static function instance() {
 		if ( ! isset( self::$instance ) && ! ( self::$instance instanceof Duplicate_Media_Checker ) ) {
 			self::$instance = new Duplicate_Media_Checker;
-			self::$instance->actions();
+			self::$instance->hooks();
 		}
 
 		return self::$instance;
 	}
 
-	function actions() {
+	/**
+	 * Actions
+	 * Registers all hooks
+	 */
+	function hooks() {
 
-		add_filter('attachment_fields_to_edit', array($this, 'attachment_fields'), null, 2);
-		add_filter('attachment_fields_to_save', array($this, 'save_attachment_fields'), 10, 2);
-		add_action('wp_ajax_save-attachment-compat', array($this, 'save_attachment_fields_ajax'), 0, 1);
-		add_filter( 'redirect_post_location', array($this, 'redirect_post_location'));
-		add_action( 'admin_notices', array($this, 'my_admin_notice' ));
+		// Add the duplicate media item notice to the attachment edit screens
+		add_filter( 'attachment_fields_to_edit', array( $this, 'attachment_fields' ), NULL, 2 );
 
+		// Delete duplicate files on attachment post save, and replace any instances in the database
+		add_filter( 'attachment_fields_to_save', array( $this, 'save_attachment_fields' ), 10, 2 );
+
+		// Delete duplicate files (AJAX function for media modal)
+		add_action( 'wp_ajax_save-attachment-compat', array( $this, 'save_attachment_fields_ajax' ), 0, 1 );
+
+		// After attachment has been deleted, redirect to media library
+		add_filter( 'redirect_post_location', array( $this, 'redirect_post_location' ) );
+
+		// Utility for displaying DMC admin notices
+		add_action( 'admin_notices', array( $this, 'admin_notices' ) );
 	}
 
-	function attachment_fields($form_fields, $uploaded_file) {
+	/**
+	 * Attachment Fields
+	 * Outputs the duplicate-media notice and relevant fields on the edit attachment screens
+	 *
+	 * @param $form_fields
+	 * @param $uploaded_file
+	 *
+	 * @return mixed
+	 */
+	function attachment_fields( $form_fields, $uploaded_file ) {
 
 		global $wpdb;
-		$exists = false;
+		$exists = FALSE;
 
-		$img_posts = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}posts WHERE post_type like 'attachment'");
+		$img_posts = $wpdb->get_results( "SELECT * FROM {$wpdb->prefix}posts WHERE post_type like 'attachment'" );
 
-		foreach($img_posts as $img) {
+		foreach ( $img_posts as $img ) {
 
-			if($img->post_title == $uploaded_file->post_title && $img->ID != $uploaded_file->ID) {
-				$exists = true;
+			if ( $img->post_title == $uploaded_file->post_title && $img->ID != $uploaded_file->ID ) {
+				$exists   = TRUE;
 				$original = $img;
 				break;
 			}
-
 		}
 
-		if($exists) {
+		if ( $exists ) {
 
-			$t = strtotime($uploaded_file->post_date);
+			$t = strtotime( $uploaded_file->post_date );
 
 			$form_fields["intro"]["tr"] = "
 			<tr class='upload-errors' style='padding: 15px 0;'>
 			    <td colspan='2' class='upload-error'>
 					<span class='upload-error-label'>Duplicate file detected</span>
 					<span class='upload-error-filename'>" . $uploaded_file->post_title . "</span>
-					<span class='upload-error-message' style='padding-bottom: 5px;'>This file appears to be a duplicate of <a href='" . get_edit_post_link($original->ID) . "'>" . $original->post_title . "</a>,
-					uploaded on " . date('n/j/y',$t) . ".</span>
+					<span class='upload-error-message' style='padding-bottom: 5px;'>This file appears to be a duplicate of <a href='" . get_edit_post_link( $original->ID ) . "'>" . $original->post_title . "</a>,
+					uploaded on " . date( 'n/j/y', $t ) . ".</span>
 					<input type='checkbox' value='1' name='attachments[" . $uploaded_file->ID . "][use_existing]' id='attachments[" . $uploaded_file->ID . "][use_existing]'/><span style='padding-left:4px;'>Use existing file</span>
 					<input type='hidden' name='attachments[" . $uploaded_file->ID . "][original]' id='attachments[" . $uploaded_file->ID . "][original]' value='" . $original->ID . "'/>
 			    </td>
@@ -82,35 +101,60 @@ class Duplicate_Media_Checker {
 		}
 
 		return $form_fields;
-
 	}
 
-
+	/**
+	 * Redirect Post Location
+	 * Redirect users to Media Library after deleting duplicate attachment
+	 *
+	 * @param $location
+	 *
+	 * @return string|void
+	 */
 	function redirect_post_location( $location ) {
 
-		if ( isset( $_POST['attachments'][$_POST['post_ID']]['use_existing'] ) ) {
-			set_transient( 'dmc-transient', 'Duplicate media file successfully removed.');
+		if ( isset( $_POST['attachments'][ $_POST['post_ID'] ]['use_existing'] ) ) {
+			set_transient( 'dmc-transient', 'Duplicate media file successfully removed.' );
+
 			return admin_url( "upload.php" );
 		}
 
 		return $location;
 	}
 
-	function my_admin_notice() {
-		if($transient = get_transient('dmc-transient')) { ?>
+	/**
+	 * Admin Notices
+	 * Displays admin notices when the dmc-transient has been set
+	 */
+	function admin_notices() {
+		if ( $message = get_transient( 'dmc-transient' ) ) {
+			?>
 			<div class="updated">
-				<p><?php echo $transient; ?></p>
+				<p><?php echo $message; ?></p>
 			</div>
-		<?php }
+			<?php
+
+			delete_transient( 'dmc-transient' );
+		}
 	}
 
-	function save_attachment_fields($post, $attachment) {
+	/**
+	 *
+	 * Save Attachment Fields
+	 * Is fired when saving an attachment (via Media Library >> Edit)
+	 *
+	 * @param $post
+	 * @param $attachment
+	 *
+	 * @return mixed
+	 */
+	function save_attachment_fields( $post, $attachment ) {
 
-		if(isset($attachment['use_existing']) && $attachment['use_existing'] == '1') {
+		if ( isset( $attachment['use_existing'] ) && $attachment['use_existing'] == '1' ) {
 
 			$original_file = get_post( $attachment['original'] );
 
-			if( false !== wp_delete_attachment( $post['ID'], true ) ) {
+			if ( FALSE !== wp_delete_attachment( $post['ID'], TRUE ) ) {
 
 				global $wpdb;
 
@@ -124,21 +168,22 @@ class Duplicate_Media_Checker {
 		}
 
 		return $post;
-
 	}
 
+	/**
+	 * Save Attachment Fields (AJAX)
+	 * Fired when attachment metadata is modified in the modal media window
+	 */
 	function save_attachment_fields_ajax() {
 
 		$post_id = $_POST['id'];
 
-		if($_POST['attachments'][$post_id]['use_existing'] == '1') {
-			$result = wp_delete_attachment( $post_id, true );
+		if ( $_POST['attachments'][ $post_id ]['use_existing'] == '1' ) {
+			$result = wp_delete_attachment( $post_id, TRUE );
 		}
 
 		return;
-
 	}
-
 }
 
 /**
